@@ -1,0 +1,32 @@
+[project]
+name = "namozvaqti"
+version = "0.1.0"
+description = "Personal script to show Namangan prayer times and notify"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "lxml>=6.0.2",
+    "requests>=2.32.5",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.ruff]
+extend-select = [
+    "I",    # isort (import sorting)
+    "F",    # pyflakes
+    "E",    # pycodestyle (formatting issues)
+    "W",    # warnings
+    "UP",   # pyupgrade (modernize syntax)
+    "C90",  # mccabe (complexity checks)
+    "B",    # flake8-bugbear (common bugs, best practices)
+]
+
+exclude = ["__pycache__", ".mypy_cache", ".venv", "venv"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+line-ending = "lf"             # useful on Linux
+
