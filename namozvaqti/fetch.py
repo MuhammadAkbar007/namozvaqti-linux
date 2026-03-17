@@ -1,5 +1,6 @@
-import requests
 import time
+
+import requests
 
 
 def fetch_month(region: str, month: int) -> str:
@@ -26,6 +27,3 @@ def fetch_month(region: str, month: int) -> str:
 
     # satisfies type checker (even though unreachable)
     raise RuntimeError("Unreachable: fetch_month exhausted retries")
-
-
-print(fetch_month("namangan", 3))
