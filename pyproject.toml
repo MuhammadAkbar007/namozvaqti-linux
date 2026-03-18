@@ -30,3 +30,6 @@ exclude = ["__pycache__", ".mypy_cache", ".venv", "venv"]
 quote-style = "preserve"
 line-ending = "lf"             # useful on Linux
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"

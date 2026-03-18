@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 CACHE_DIR = Path.home() / ".cache" / "namozvaqti"
@@ -27,3 +28,32 @@ def load_month(year: int, month: int) -> dict | None:
 
     with open(path) as f:
         return json.load(f)
+
+
+def load_today() -> dict:
+    now = datetime.now()
+    data = load_month(now.year, now.month)
+
+    if data is None:
+        raise RuntimeError("Monthly cache not found")
+
+    today_key = now.strftime("%Y-%m-%d")
+
+    if today_key not in data:
+        raise RuntimeError("Today's data not found")
+
+    return data[today_key]
+
+
+def load_day(date: datetime) -> dict:
+    data = load_month(date.year, date.month)
+
+    if data is None:
+        raise RuntimeError("Monthly cache not found")
+
+    key = date.strftime("%Y-%m-%d")
+
+    if key not in data:
+        raise RuntimeError(f"No data for {key}")
+
+    return data[key]
