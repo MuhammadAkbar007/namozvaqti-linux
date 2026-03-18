@@ -1,8 +1,8 @@
 import time
 from datetime import datetime
 
-from namozvaqti.logic import get_next_prayer
 from namozvaqti.notify import notify
+from namozvaqti.service import get_next_prayer
 
 
 def run():
@@ -11,7 +11,8 @@ def run():
     while True:
         now = datetime.now()
 
-        name, prayer_time = get_next_prayer(now)
+        name, prayer = get_next_prayer(now)
+        prayer_time = datetime.fromtimestamp(prayer["timestamp"])
 
         wait_seconds = max(0, (prayer_time - now).total_seconds())
 
