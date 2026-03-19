@@ -1,5 +1,3 @@
-# src/namoz/parse.py
-
 from bs4 import BeautifulSoup
 
 

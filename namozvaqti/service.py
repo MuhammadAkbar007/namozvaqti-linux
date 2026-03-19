@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta
 
-from namozvaqti.cache import load_month, save_month
-from namozvaqti.fetch import fetch_month
-from namozvaqti.parse import parse_month
-
 REGION = "namangan"
 
 
 def ensure_month(year: int, month: int):
+    from namozvaqti.cache import load_month, save_month
+    from namozvaqti.fetch import fetch_month
+    from namozvaqti.parse import parse_month
+
     data = load_month(year, month)
 
     if data is not None:

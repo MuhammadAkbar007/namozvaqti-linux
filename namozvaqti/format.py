@@ -1,11 +1,9 @@
 import json
 from datetime import datetime
 
-from namozvaqti.service import get_next_prayer_with_rollover, get_today
-
 
 def time_remaining(target_ts: int, now_ts: int):
-    diff = int(target_ts - now_ts)
+    diff = max(0, int(target_ts - now_ts))
 
     hours = diff // 3600
     minutes = (diff % 3600) // 60
@@ -29,11 +27,14 @@ def format_tooltip(day_data):
     return "\n".join(lines)
 
 
-def build_waybar_output(cache):
-    now_ts = int(datetime.now().timestamp())
+def build_waybar_output():
+    from namozvaqti.service import get_day, get_next_prayer
 
-    today_data = get_today(cache)
-    name, prayer = get_next_prayer_with_rollover(cache, today_data, now_ts)
+    now = datetime.now()
+    now_ts = int(now.timestamp())
+
+    today_data = get_day(now)
+    name, prayer = get_next_prayer(now)
 
     text = format_text(name, prayer, now_ts)
     tooltip = format_tooltip(today_data)

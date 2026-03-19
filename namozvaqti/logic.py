@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta
 
-from namozvaqti.cache import load_day
-
 PRAYER_ORDER = ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"]
 
 
@@ -15,6 +13,8 @@ def parse_time(today: dict, key: str) -> datetime:
 
 
 def get_next_prayer(now: datetime):
+    from namozvaqti.cache import load_day
+
     today = load_day(now)
 
     now_ts = int(now.timestamp())
