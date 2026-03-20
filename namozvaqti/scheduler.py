@@ -19,8 +19,13 @@ def run():
     while True:
         now = datetime.now()
 
-        name, prayer = get_next_prayer(now)
-        prayer_time = datetime.fromtimestamp(prayer["timestamp"])
+        try:
+            name, prayer = get_next_prayer(now)
+            prayer_time = datetime.fromtimestamp(prayer["timestamp"])
+        except Exception as e:
+            print(f"[Scheduler] Failed to get prayer time: {e}")
+            time.sleep(60)
+            continue
 
         wait_seconds = max(0, (prayer_time - now).total_seconds())
 

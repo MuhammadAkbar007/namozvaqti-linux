@@ -28,15 +28,23 @@ def format_tooltip(day_data):
 
 
 def build_waybar_output():
-    from namozvaqti.service import get_day, get_next_prayer
+    try:
+        from namozvaqti.service import get_day, get_next_prayer
 
-    now = datetime.now()
-    now_ts = int(now.timestamp())
+        now = datetime.now()
+        now_ts = int(now.timestamp())
 
-    today_data = get_day(now)
-    name, prayer = get_next_prayer(now)
+        today_data = get_day(now)
+        name, prayer = get_next_prayer(now)
 
-    text = format_text(name, prayer, now_ts)
-    tooltip = format_tooltip(today_data)
+        text = format_text(name, prayer, now_ts)
+        tooltip = format_tooltip(today_data)
 
-    return json.dumps({"text": text, "tooltip": tooltip})
+        return json.dumps({"text": text, "tooltip": tooltip})
+    except Exception as e:
+        return json.dumps(
+            {
+                "text": "󰔟 Loading...",
+                "tooltip": str(e),
+            }
+        )

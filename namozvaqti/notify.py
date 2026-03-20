@@ -75,7 +75,7 @@ def notify(
             cmd.append(f"--icon={DEFAULT_ICON}")
 
         # Add title and message
-        cmd.extend([title, message])
+        cmd.extend([title.title(), message.title()])
 
         subprocess.run(cmd, check=False)
 
