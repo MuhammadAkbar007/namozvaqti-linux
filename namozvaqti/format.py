@@ -13,7 +13,6 @@ def time_remaining(target_ts: int, now_ts: int):
 
 def format_text(name, prayer, now_ts):
     remaining = time_remaining(prayer["timestamp"], now_ts)
-    # return f"  {name.capitalize()} {prayer['time']} (in {remaining})"
     return f"  {name.capitalize()} {prayer['time']} | 󰔟 {remaining}"  # 󰞌
 
 
