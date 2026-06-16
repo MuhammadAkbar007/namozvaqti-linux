@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 
 from namozvaqti.notify import notify
-from namozvaqti.service import get_next_prayer
+from namozvaqti.service import get_next_prayer_resilient
 
 
 def send_waybar_signal():
@@ -20,9 +20,12 @@ def run():
         now = datetime.now()
 
         try:
-            name, prayer = get_next_prayer(now)
+            # resilient: falls back to the last cached day (re-stamped onto
+            # today) when offline, so notifications still fire on stale data.
+            name, prayer = get_next_prayer_resilient(now)
             prayer_time = datetime.fromtimestamp(prayer["timestamp"])
         except Exception as e:
+            # only reached when nothing is cached at all (never fetched offline)
             print(f"[Scheduler] Failed to get prayer time: {e}")
             time.sleep(60)
             continue

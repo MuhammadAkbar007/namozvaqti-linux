@@ -79,3 +79,25 @@ def rebuild_for_date(day_data: dict, date: datetime) -> dict:
 
 def get_next_prayer(now: datetime):
     return next_prayer_for_day(get_day(now), now)
+
+
+def get_next_prayer_resilient(now: datetime):
+    """Next prayer, with the same stale fallback the bar uses.
+
+    Normally reads today's (cached or freshly fetched) data. If that fails
+    (offline + today not cached), it falls back to the most recent cached day
+    re-stamped onto today's clock — so callers like the scheduler still get a
+    usable next prayer (and fire notifications) instead of an exception. Raises
+    only when nothing is cached at all.
+    """
+    try:
+        return next_prayer_for_day(get_day(now), now)
+    except Exception:
+        from namozvaqti.cache import load_latest_before
+
+        stale = load_latest_before(now)
+        if stale is None:
+            raise
+        _, day_data = stale
+        approx = rebuild_for_date(day_data, now)
+        return next_prayer_for_day(approx, now)
