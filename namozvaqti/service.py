@@ -1,74 +1,81 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from namozvaqti.cache import load_month
+from namozvaqti.cache import load_day
+from namozvaqti.time_utils import build_timestamp
 
-REGION = "namangan"
+# Order used to pick the "next" prayer and to lay out the tooltip. Sunrise and
+# Ishroq are informational rows; they're included so the countdown also stops on
+# them.
+PRAYER_ORDER = ["fajr", "sunrise", "ishroq", "dhuhr", "asr", "maghrib", "isha"]
 
 
-def ensure_month(year: int, month: int):
-    from namozvaqti.cache import load_month, save_month
+def ensure_day(date: datetime) -> dict:
+    """Return one day's enriched prayer dict, fetching + caching if missing.
+
+    Aladhan returns a whole month in one call, so a cache miss fetches the entire
+    month and writes a per-day cache file for each day — one successful fetch
+    then runs offline for the rest of the month. Done synchronously (it's a fast
+    JSON call) to avoid the old daemon-thread bug where the one-shot
+    waybar/polybar process exited before a background fetch could finish.
+    """
+    from namozvaqti.cache import save_day
     from namozvaqti.fetch import fetch_month
     from namozvaqti.parse import parse_month
     from namozvaqti.transform import enrich_with_timestamps
 
-    data = load_month(year, month)
-
-    if data is not None:
-        return data
-
-    try:
-        # fetch → parse → save
-        html = fetch_month(REGION, month)
-        parsed = parse_month(html, year, month)
-        enriched = enrich_with_timestamps(parsed)
-
-        save_month(year, month, enriched)
-        return enriched
-
-    except Exception as e:
-        print(f"[Cache] Failed to fetch {year}-{month:02d}: {e}")
-
-        # ❗ fallback strategy
-        previous = load_month(year, month - 1)
-
-        if previous:
-            print("[Cache] Using previous month as fallback")
-            return previous
-
-        raise RuntimeError("No data available (offline + no cache)")  # noqa: B904
-
-
-def get_day(date: datetime) -> dict:
-    from namozvaqti.background import ensure_month_async
-
-    data = load_month(date.year, date.month)
-
-    if data is None:
-        ensure_month_async(date.year, date.month)
-        raise RuntimeError("Cache missing (fetching in background)")
+    cached = load_day(date)
+    if cached is not None:
+        return cached
 
     key = date.strftime("%Y-%m-%d")
 
-    if key not in data:
-        raise RuntimeError(f"No data for {key}")
+    data = fetch_month(date.year, date.month)
+    parsed = parse_month(data)                     # {date_key: {name: "HH:MM"}}
+    enriched = enrich_with_timestamps(parsed)      # {date_key: {name: {time, ts}}}
 
-    return data[key]
+    for day_key, day in enriched.items():
+        save_day(day_key, day)
+
+    if key not in enriched:
+        raise RuntimeError(f"Fetched month had no entry for {key}")
+
+    return enriched[key]
+
+
+def get_day(date: datetime) -> dict:
+    return ensure_day(date)
+
+
+def next_prayer_for_day(day_data: dict, now: datetime):
+    """Pick the next prayer from an already-loaded day dict (no fetching)."""
+    now_ts = int(now.timestamp())
+
+    # 1️⃣ next prayer still ahead today
+    for name in PRAYER_ORDER:
+        prayer = day_data.get(name)
+        if prayer and prayer["timestamp"] > now_ts:
+            return name, prayer
+
+    # 2️⃣ after isha → tomorrow's fajr. praytime.uz is today-only, so approximate
+    # it as today's fajr + 24h (a minute's drift at most; the page rolls over to
+    # the new day after midnight and the real time is fetched then).
+    fajr = day_data["fajr"]
+    return "fajr", {"time": fajr["time"], "timestamp": fajr["timestamp"] + 86400}
+
+
+def rebuild_for_date(day_data: dict, date: datetime) -> dict:
+    """Re-stamp a day's time strings onto another date's clock.
+
+    Used for the stale fallback: yesterday's "HH:MM" values are recomputed as
+    today's timestamps so the live countdown still works (the times themselves
+    drift only ~1 min/day).
+    """
+    key = date.strftime("%Y-%m-%d")
+    return {
+        name: {"time": p["time"], "timestamp": build_timestamp(key, p["time"])}
+        for name, p in day_data.items()
+    }
 
 
 def get_next_prayer(now: datetime):
-    ordered = ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"]
-
-    now_ts = int(now.timestamp())
-
-    today_data = get_day(now)
-
-    # 1️⃣ try today
-    for name in ordered:
-        if today_data[name]["timestamp"] > now_ts:
-            return name, today_data[name]
-
-    # 2️⃣ fallback → tomorrow fajr
-    tomorrow = now + timedelta(days=1)
-    tomorrow_data = get_day(tomorrow)
-
-    return "fajr", tomorrow_data["fajr"]
+    return next_prayer_for_day(get_day(now), now)

@@ -1,36 +1,63 @@
-# 🕌 NamozVaqti (Waybar Prayer Times)
+# 🕌 NamozVaqti (Polybar / Waybar Prayer Times)
 
-A lightweight Linux prayer time system with:
+A lightweight Linux prayer-time system for **Namangan, Uzbekistan**:
 
-* 📊 Waybar integration (live next prayer + tooltip)
-* 🔔 Desktop notifications (with sound)
-* ⚡ Ultra-efficient scheduler (event-driven, not polling-heavy)
-* 💾 Monthly caching (offline-first behavior)
+* 📊 Polybar / Waybar integration (live next prayer + full-day list)
+* 🔔 Desktop notifications (with sound) exactly at prayer time
+* ⚡ Event-driven scheduler (sleeps until the next prayer — not polling-heavy)
+* 💾 Monthly caching, offline-first (one fetch covers the whole month)
+
+---
+
+## 🧭 Data source
+
+Prayer times come from the **[Aladhan API](https://aladhan.com/prayer-times-api)**,
+configured to reproduce the **official ISLOM.UZ (Muslim Board of Uzbekistan)
+Namangan calendar**. The parameters were reverse-engineered against the official
+June-2026 sheet and match every prayer to within 1 minute (rounding):
+
+| Parameter        | Value                  | Meaning                                   |
+| ---------------- | ---------------------- | ----------------------------------------- |
+| `latitude`       | `41.0058`              | Namangan                                  |
+| `longitude`      | `71.6436`              | Namangan                                  |
+| `method`         | `99`                   | Custom angle-based method                 |
+| `methodSettings` | `15.5,null,15.5`       | Fajr 15.5° · Maghrib = sunset · Isha 15.5°|
+| `school`         | `1`                    | Hanafi Asr (later Asr)                    |
+| `timezonestring` | `Asia/Tashkent`        | UTC+5                                      |
+| `tune`           | `0,0,0,0,0,4,0,0,0`    | +4 min on Maghrib (board's sunset margin) |
+
+> **Ishroq** is derived as Sunrise + 20 min (matches the sheet exactly).
+> **Tahajjud** is intentionally omitted — its value on the official sheet has no
+> reliable Aladhan equivalent, so showing it would mislead.
+
+All settings live in `namozvaqti/fetch.py`. To target another city, change the
+coordinates (and re-verify `methodSettings`/`tune` against that region's sheet).
 
 ---
 
 ## 📦 Features
 
-* Shows **next prayer** in Waybar:
+* Next prayer on the bar:
 
   ```
-  Asr 16:38 (in 1h 12m)
+   Asr 17:29 | 󰔟 1h 30m
   ```
 
-* Tooltip shows full day:
+* Full day in the tooltip / click-popup:
 
   ```
-  Fajr     04:58
-  Sunrise  06:17
-  Dhuhr    12:25
-  Asr      16:38
-  Maghrib  18:28
-  Isha     19:41
+  Fajr      02:56
+  Sunrise   04:41
+  Ishroq    05:01
+  Dhuhr     12:14
+  Asr       17:29
+  Maghrib   19:52
+  Isha      21:32
   ```
 
-* Sends notification + sound exactly at prayer time
+* Notification + sound at each prayer, with an instant bar refresh via signal.
 
-* Updates Waybar instantly via **signal (no polling lag)**
+* Stale data (offline) is flagged with a 󰅐 marker until the next successful fetch.
 
 ---
 
@@ -38,60 +65,32 @@ A lightweight Linux prayer time system with:
 
 ```
 namozvaqti/
-├── cache.py
-├── fetch.py
-├── parse.py
-├── transform.py
-├── service.py
-├── format.py
-├── notify.py
-├── scheduler.py
-├── time_utils.py
-├── assets/
-│   ├── prayer-notification.wav
-│   └── mosque_transparent.png
-└── scripts/
-    └── test_waybar.py
+├── fetch.py        # Aladhan API call (one month per request)
+├── parse.py        # Aladhan JSON  → {date: {name: "HH:MM"}}  (+ Ishroq)
+├── transform.py    # adds unix timestamps
+├── cache.py        # per-day cache files in ~/.cache/namozvaqti/
+├── service.py      # ensure/get day, pick next prayer, stale fallback
+├── format.py       # builds the Polybar/Waybar JSON
+├── notify.py       # desktop notification + sound
+├── scheduler.py    # sleeps to next prayer → notify + signal bar
+├── time_utils.py   # timezone-aware timestamp helper
+├── scripts/
+│   ├── test_waybar.py   # the bar entry point (prints the JSON)
+│   └── test_notify.py   # manual notification test
+└── assets/
+    ├── prayer-notification.wav
+    └── mosque_transparent.png
 ```
 
 ---
 
-## ⚙️Requirements
-
-Install system dependencies:
+## ⚙️ Requirements
 
 ```bash
-sudo nala install python3 python3-pip waybar libnotify-bin pipewire
+sudo nala install python3 libnotify-bin pipewire   # + polybar or waybar, jq
 ```
 
-Install Python dependencies:
-
-```bash
-pip install requests beautifulsoup4 lxml
-```
-
----
-
-## 🚀 Setup (Fresh System)
-
-### 1. Clone project
-
-```bash
-git clone https://github.com/MuhammadAkbar007/namozvaqti-linux.git
-cd namozvaqti-linux
-```
-
----
-
-### 2. Setup virtual environment (recommended)
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Or if using `uv`:
+Python deps (only `requests`) are managed with **[uv](https://docs.astral.sh/uv/)**:
 
 ```bash
 uv sync
@@ -99,48 +98,71 @@ uv sync
 
 ---
 
-### 3. Test Waybar script manually
+## 🚀 Setup
+
+### 1. Clone & sync
 
 ```bash
-python -m namozvaqti.scripts.test_waybar
+git clone https://github.com/MuhammadAkbar007/namozvaqti-linux.git
+cd namozvaqti-linux
+uv sync
 ```
 
-Expected output:
+### 2. Test the producer manually
+
+```bash
+uv run -m namozvaqti.scripts.test_waybar
+```
+
+Expected (Waybar-style JSON, consumed by both bars):
 
 ```json
-{"text": "Asr 16:38 (in 1h 12m)", "tooltip": "..."}
+{"text": "  Asr 17:29 | 󰔟 1h 30m", "tooltip": "Fajr 02:56\n..."}
 ```
 
 ---
 
-## 🧩 Waybar Integration
+## 🧩 Bar Integration
 
-### 1. Create script wrapper
+The producer outputs **Waybar-style JSON**; Polybar consumes the same output via
+a tiny `jq` wrapper.
 
-`~/.config/waybar/prayer.sh`
-
-```bash
-#!/bin/bash
-
-export PATH="$HOME/.local/bin:$PATH"
-
-cd ~/path/to/namozvaqti || exit
-
-/home/akbar/akbarDev/pet-projects/namozvaqti/.venv/bin/python \
-    -m namozvaqti.scripts.test_waybar
-```
-
-Make executable:
+### Shared producer — `~/.config/waybar/prayer.sh`
 
 ```bash
-chmod +x ~/.config/waybar/prayer.sh
+#!/usr/bin/env bash
+cd /home/akbar/akbarDev/pet-projects/namozvaqti || exit 1
+/home/akbar/.local/bin/uv run -m namozvaqti.scripts.test_waybar
 ```
 
----
+### Polybar
 
-### 2. Add Waybar module
+`~/.config/polybar/prayer.sh` (extracts `.text`):
 
-In `custom.jsonc`:
+```bash
+#!/usr/bin/env bash
+set -u
+out="$(~/.config/waybar/prayer.sh 2>/dev/null)"
+[ -n "$out" ] && printf '%s\n' "$out" | jq -r '.text // empty'
+```
+
+`config.ini`:
+
+```ini
+[module/prayer]
+type = custom/script
+exec = ~/.config/polybar/prayer.sh
+interval = 60
+click-left = kitty -e ~/.config/polybar/prayer_popup.sh
+```
+
+> `interval = 60` also makes the bar **self-heal**: whenever today isn't cached
+> (e.g. you were offline at boot), each poll retries the fetch, so the stale
+> marker clears within ~60s of reconnecting.
+
+### Waybar
+
+`custom.jsonc`:
 
 ```json
 "custom/prayer": {
@@ -153,39 +175,15 @@ In `custom.jsonc`:
 
 ---
 
-### 3. Add to Waybar layout
+## 🔔 Scheduler (notifications + bar signal)
 
-```json
-"modules-right": [
-    ...
-    "custom/prayer",
-    "clock"
-]
-```
-
----
-
-### 4. Reload Waybar
+Test manually:
 
 ```bash
-pkill waybar && waybar
+uv run -m namozvaqti.scheduler
 ```
 
----
-
-## 🔔 Scheduler (Notifications + Waybar Signal)
-
-### 1. Test manually
-
-```bash
-python -m namozvaqti.scheduler
-```
-
----
-
-### 2. Create systemd user service
-
-`~/.config/systemd/user/namozvaqti.service`
+`~/.config/systemd/user/namozvaqti.service`:
 
 ```ini
 [Unit]
@@ -201,156 +199,60 @@ RestartSec=5
 WantedBy=default.target
 ```
 
----
-
-### 3. Enable service
+Enable:
 
 ```bash
-systemctl --user daemon-reexec
 systemctl --user daemon-reload
-systemctl --user enable namozvaqti.service
-systemctl --user start namozvaqti.service
-```
-
----
-
-### 4. Check status
-
-```bash
+systemctl --user enable --now namozvaqti.service
 systemctl --user status namozvaqti.service
-```
-
-Logs:
-
-```bash
-journalctl --user -u namozvaqti.service -f
 ```
 
 ---
 
 ## ⚡ How It Works
 
-### Data Flow
-
 ```
-fetch → parse → transform → cache → service → waybar/scheduler
+fetch (1 month) → parse → transform → cache (per day) → service → bar / scheduler
 ```
 
----
-
-### Runtime Behavior
-
-1. On first run:
-
-   * Fetches monthly data from API
-   * Saves to:
-
-     ```
-     ~/.cache/namozvaqti/YYYY-MM.json
-     ```
-
-2. Every prayer:
-
-   * Scheduler sleeps until next prayer timestamp
-   * Sends notification
-   * Sends Waybar signal (`SIGRTMIN+8`)
-
-3. Waybar:
-
-   * Updates instantly (no polling delay)
+1. **First run / cache miss** — fetches the whole month from Aladhan and writes
+   one file per day to `~/.cache/namozvaqti/YYYY-MM-DD.json`. One successful
+   fetch then runs **fully offline** for the rest of the month.
+2. **Each prayer** — the scheduler sleeps until the next timestamp, sends a
+   notification + sound, and signals the bar to refresh instantly.
+3. **Bar** — re-renders on its 60s interval (Polybar) or on signal (Waybar).
 
 ---
 
 ## 🌐 Offline Behavior
 
-| Scenario               | Behavior                         |
-| ---------------------- | -------------------------------- |
-| Cached month exists    | ✅ Works normally                 |
-| New month, no internet | ❌ Fails to fetch                 |
-| After failure          | Waybar may show stale/empty data |
-
----
-
-### 🔧 Recommended Improvement (Optional)
-
-Preload next month:
-
-Add to scheduler:
-
-```python
-from namozvaqti.service import ensure_month
-
-now = datetime.now()
-ensure_month(now.year, now.month)
-ensure_month((now + timedelta(days=31)).year, (now + timedelta(days=31)).month)
-```
+| Scenario                          | Behavior                                            |
+| --------------------------------- | --------------------------------------------------- |
+| Current month cached              | ✅ Works fully offline                               |
+| New month, offline                | Shows the last cached day, flagged 󰅐 (stale)        |
+| Reconnected                       | Next 60s poll re-fetches the month; marker clears   |
 
 ---
 
 ## 🧪 Debugging
 
-### Waybar shows nothing
-
-Check:
-
-```bash
-~/.config/waybar/prayer.sh
-```
-
-Add debug:
+The bar producer prints real errors to **stderr** (a fetch/parse failure is no
+longer silently hidden behind stale data):
 
 ```bash
 ~/.config/waybar/prayer.sh 2> /tmp/prayer.log
+cat /tmp/prayer.log
 ```
 
----
-
-### "uv: command not found"
-
-Fix PATH in script:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
----
-
-### Notifications not working
-
-Test:
+Notifications / sound:
 
 ```bash
 notify-send "Test" "Hello"
+pw-play assets/prayer-notification.wav
 ```
-
-Check sound:
-
-```bash
-pw-play file.wav
-```
-
----
-
-## 🔄 Reinstall Checklist
-
-After OS reinstall:
-
-1. Install dependencies
-2. Clone repo
-3. Setup venv / uv
-4. Restore:
-
-   * `~/.config/waybar/`
-   * `~/.config/systemd/user/`
-5. Enable service:
-
-   ```bash
-   systemctl --user enable namozvaqti.service
-   systemctl --user start namozvaqti.service
-   ```
-6. Restart Waybar
 
 ---
 
 ## ✍️ Author
+
 Created by [Akbar](https://github.com/MuhammadAkbar007).

@@ -1,5 +1,11 @@
 import json
+import sys
+import traceback
 from datetime import datetime
+
+# bare clock-history glyph used to flag stale (last-known) data on the bar; no
+# accompanying word, to keep the label short.
+STALE_MARKER = "󰅐"
 
 
 def time_remaining(target_ts: int, now_ts: int):
@@ -17,34 +23,62 @@ def format_text(name, prayer, now_ts):
 
 
 def format_tooltip(day_data):
-    order = ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"]
+    # full list shown on click (Ishroq included when present)
+    order = ["fajr", "sunrise", "ishroq", "dhuhr", "asr", "maghrib", "isha"]
 
     lines = []
     for name in order:
-        time = day_data[name]["time"]
-        lines.append(f"{name.capitalize():<8} {time}")
+        prayer = day_data.get(name)
+        if not prayer:
+            continue
+        lines.append(f"{name.capitalize():<9} {prayer['time']}")
 
     return "\n".join(lines)
 
 
 def build_waybar_output():
+    from namozvaqti.service import (
+        get_day,
+        get_next_prayer,
+        next_prayer_for_day,
+        rebuild_for_date,
+    )
+
+    now = datetime.now()
+    now_ts = int(now.timestamp())
+
+    # 1️⃣ normal path: today's data (cached, or fetched — 3 attempts in fetch.py)
     try:
-        from namozvaqti.service import get_day, get_next_prayer
-
-        now = datetime.now()
-        now_ts = int(now.timestamp())
-
         today_data = get_day(now)
         name, prayer = get_next_prayer(now)
-
-        text = format_text(name, prayer, now_ts)
-        tooltip = format_tooltip(today_data)
-
-        return json.dumps({"text": text, "tooltip": tooltip})
-    except Exception as e:
         return json.dumps(
             {
-                "text": "󰔟 Loading...",
-                "tooltip": str(e),
+                "text": format_text(name, prayer, now_ts),
+                "tooltip": format_tooltip(today_data),
             }
         )
+    except Exception as e:
+        loading_error = str(e)
+        # Surface the real cause on stderr (e.g. `prayer.sh 2>/tmp/prayer.log`).
+        # Without this, a parser bug looks identical to being offline and the
+        # bar silently shows stale data forever.
+        traceback.print_exc(file=sys.stderr)
+
+    # 2️⃣ offline (all attempts failed) → fall back to the last cached day,
+    # re-stamped onto today's clock, flagged with a bare 󰅐 on the bar.
+    from namozvaqti.cache import load_latest_before
+
+    stale = load_latest_before(now)
+    if stale is not None:
+        day_key, day_data = stale
+        approx = rebuild_for_date(day_data, now)
+        name, prayer = next_prayer_for_day(approx, now)
+        return json.dumps(
+            {
+                "text": f"{STALE_MARKER} {format_text(name, prayer, now_ts)}",
+                "tooltip": f"{format_tooltip(day_data)}\n{STALE_MARKER} {day_key}",
+            }
+        )
+
+    # 3️⃣ nothing cached at all → keep showing loading while it keeps retrying
+    return json.dumps({"text": "󰔟 Loading...", "tooltip": loading_error})

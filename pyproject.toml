@@ -5,8 +5,6 @@ description = "Personal script to show Namangan prayer times and notify"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "beautifulsoup4>=4.14.3",
-    "lxml>=6.0.2",
     "requests>=2.32.5",
 ]
 
